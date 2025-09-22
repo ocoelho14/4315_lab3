@@ -3,3 +3,119 @@ title: "lab3_assembly_annotation"
 output: html_document
 ---
 
+library("IRanges")
+library("GenomicRanges")
+library("Rsamtools")
+library("GenomicAlignments")
+library("Gviz")
+
+
+Assembly statistics:
+
+        Total length:   12679670
+        Fragments:      354
+        Fragments N50:  52932
+        Largest frg:    302366
+        Scaffolds:      0
+        Mean coverage:  8
+
+#4.1 (Q1)
+Although the total length is close to the estimated size of the genome, the results are very fragmented, at 354 fragments/contigs. Also the coverage of the sample is not adequate at 8, as it hints at a low consensus accuracy 
+
+#5.1.1 
+
+```{r4, eval=FALSE}
+C:33.9%[S:33.7%,D:0.1%],F:0.4%,M:65.8%,n:3282,E:5.1% 
+	1111	Complete BUSCOs (C)	(of which 57 contain internal stop codons)  
+	1107	Complete and single-copy BUSCOs (S)	 
+	4	Complete and duplicated BUSCOs (D)	   
+	13	Fragmented BUSCOs (F)			  
+	2158	Missing BUSCOs (M)			  
+	3282	Total BUSCO groups searched	
+```
+
+Given the very low coverage of this, I would say the results are tragic. BUSCO shows 1/3 level of completeness, which is in line with what I might expect given low coverage.
+
+The BUSCO N50 was close to the N50 from flye, showing 52932 from flye and ~52 kbp from BUSCO
+
+The total assembly length from BUSCO outputs was 12679670, which is exactly the same as the length from flye
+
+#5.2.1
+
+The quast genome fraction is 0.529 (52.9%). Compared to the BUSCO metric which showed a completeness of ~33%, the results don't agree with each other. 
+
+The duplication ratio from quast is 1.156
+
+The level of misassemblies and length of misassemblies both being zero tells me that the reference genome is a great fit for my isolated genome. It also shows that nothing crazy happened to the structure, like translocations or inversions.
+
+#6.2
+install.packages("BiocManager")            
+BiocManager::install("Biostrings, force=TRUE")    
+library(Biostrings)
+
+in_fa  <- "./GCF_000146045.2_R64_genomic.fna"
+out_fa <- "R64_chr1.fna"
+
+# Read all sequences
+fa <- readDNAStringSet(in_fa)
+
+# Find the entry for chromosome I (handles common header variants)
+pick <- grep("(\\bchrI\\b|chromosome I|NC_001133\\.9)", names(fa), ignore.case = TRUE)
+pick <- pick[1]
+
+
+writeXStringSet(fa[pick], out_fa, width = 60)
+cat(sprintf("Wrote %s (%d bp)\n", out_fa, width(fa[pick])))
+
+
+BiocManager::install("Rsamtools",force=TRUE)
+library(Rsamtools)
+BiocManager::install("GenomicAlignments")
+library(GenomicAlignments)
+BiocManager::install("Gviz",force=TRUE)
+library(Gviz)
+# BAM file path
+bam_file <- "contig_vs_chr1.sorted.bam"
+
+# Open connection to BAM file
+bam <- BamFile(bam_file)
+
+# Read all alignments (already restricted to chr1)
+alns <- readGAlignments(bam)
+
+# Convert to GRanges object
+gr_alns <- granges(alns)
+options(ucscChromosomeNames = FALSE)
+aln_track <- AnnotationTrack(gr_alns, name = "Contigs", genome = "sacCer3", chromosome = "chr1")
+axis_track <- GenomeAxisTrack()
+
+plotTracks(list(axis_track, aln_track),
+           from = min(start(gr_alns)),
+           to = max(end(gr_alns)),
+           main = "Contig Alignments to Chromosome 1")
+           
+length(gr_alns)
+
+#6.3.2.1
+There are 2 contigs aligning to chr1
+
+```{r plotTracks, eval=TRUE,fig.width=8, fig.height=4}
+knitr::include_graphics("plotsTrack_lab3.pdf")
+```
+
+#6.3.3
+out_fa <- "longest_contig.fasta"
+lens <- width(fa)
+idx  <- which.max(lens)
+writeXStringSet(fa[idx], out_fa, width = 60)
+cat(sprintf("Wrote longest contig: %s (%d bp) → %s\n", names(fa)[idx], lens[idx], out_fa))
+
+#6.3.4
+minimap2 -ax splice -uf --secondary=no ./longest_contig.fasta GCF_000146045.2_R64_genomic.fna > cds_aln.sam
+
+#6.3.5
+samtools view -bS cds_aln.sam > cds_aln.bam
+
+samtools sort cds_aln.bam -o cds_aln.sorted.bam
+
+samtools index cds_aln.sorted.bam
