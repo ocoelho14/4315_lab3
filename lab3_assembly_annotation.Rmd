@@ -119,3 +119,20 @@ samtools view -bS cds_aln.sam > cds_aln.bam
 samtools sort cds_aln.bam -o cds_aln.sorted.bam
 
 samtools index cds_aln.sorted.bam
+
+#6.3.6
+options(ucscChromosomeNames = FALSE)
+bam_file <- "cds_aln.sorted.bam"
+bam <- BamFile(bam_file)
+alns <- readGAlignments(bam)
+gr_alns <- granges(alns)
+aln_track <- AnnotationTrack(gr_alns, name = "Contigs", genome = "sacCer3", chromosome = "chr1")
+axis_track <- GenomeAxisTrack()
+plotTracks(list(axis_track, aln_track),
+           from = min(start(gr_alns)),
+           to = max(end(gr_alns)),
+           main = "Contig Alignments to longest contig")
+      
+```{r plotTracks2, eval=TRUE,fig.width=8, fig.height=4}
+knitr::include_graphics("longest_contig_track.pdf")
+```
